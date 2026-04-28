@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+
+enum membership_role {
+  CAPTAIN
+  NAVIGATOR
+  MEMBER
+}
+
+enum membership_status {
+  ACTIVE
+  KICKED
+  LEFT
+}
+
+enum transaction_status {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum story_status {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum crew_status {
+  ACTIVE
+  FAILED
+}
+
+// --- MODELS ---
+
+model users {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique @db.VarChar(255)
+  password_hash  String
+  full_name      String?   @db.VarChar(100)
+  avatar_url     String?
+  bio            String?
+  is_active      Boolean?  @default(true)
+  refresh_token  String?
+  
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at     DateTime? @db.Timestamptz(6) // Soft delete cho User
+
+  activity_logs  activity_logs[]
+  crews          crews[]
+  invite_codes   invite_codes[]
+  memberships    memberships[]
+  notifications  notifications[]
+  stories        stories[]
+  story_comments story_comments[]
+  story_likes    story_likes[]
+  transactions   transactions[]
+  user_settings  user_settings?
+  bank_accounts   bank_accounts[]
+}
+
+model bank_accounts {
+  id             String   @id @default(uuid()) @db.Uuid  // <-- Thêm @db.Uuid
+  user_id        String   @db.Uuid
+  bank_bin       String   // Mã BIN của ngân hàng (Dùng để gen VietQR, VD: 970436)
+  bank_name      String   // Tên ngân hàng (VD: Vietcombank)
+  account_number String   // Số tài khoản
+  account_name   String   // Tên chủ tài khoản (In hoa không dấu, VD: NGUYEN VAN A)
+  is_default     Boolean  @default(false) // Đánh dấu tài khoản thường dùng nhất
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  // Móc neo về bảng users
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  crews          crews[]
+}
+
+model crews {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @db.VarChar(100)
+  description   String?
+  goal          Decimal   @db.Decimal(15, 2)
+  owner_id      String?   @db.Uuid
+  status          crew_status? @default(ACTIVE)
+  failure_count   Int?         @default(0)
+  total_balance Decimal?  @default(0.00) @db.Decimal(15, 2)
+  currency      String?   @default("VND") @db.VarChar(10)
+  color         String?   @default("#2563eb")
+  
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at    DateTime? @db.Timestamptz(6) // Soft delete cho Hạm đội
+  bank_account_id String? @db.Uuid
+  bank_accounts   bank_accounts? @relation(fields: [bank_account_id], references: [id])
+
+  users         users?          @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  activity_logs activity_logs[]
+  crew_periods  crew_periods[]
+  invite_codes  invite_codes[]
+  memberships   memberships[]
+  stories       stories[]
+  transactions  transactions[]
+}
+
+model memberships {
+  id         String            @id @default(uuid()) @db.Uuid
+  user_id    String            @db.Uuid
+  crew_id    String            @db.Uuid
+  role       membership_role?  @default(MEMBER)
+  status     membership_status @default(ACTIVE) // Quản lý kick/rời nhóm
+  joined_at  DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at DateTime          @updatedAt @db.Timestamptz(6)
+  kicked_at  DateTime?         @db.Timestamptz(6) // Lưu vết khi bị kick
+  total_contribution Decimal?  @default(0.00) @db.Decimal(15, 2)
+
+  crews      crews?            @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+  users      users?            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, crew_id])
+}
+
+model stories {
+  id             String           @id @default(uuid()) @db.Uuid
+  crew_id        String?          @db.Uuid
+  user_id        String?          @db.Uuid
+  media_url      String
+  caption        String?
+  status         story_status     @default(ACTIVE)
+  
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime         @updatedAt @db.Timestamptz(6)
+  deleted_at     DateTime?        @db.Timestamptz(6) // Soft delete bài viết
+
+  crews          crews?           @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+  users          users?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  story_comments story_comments[]
+  story_likes    story_likes[]
+}
+
+model transactions {
+  id             String              @id @default(uuid()) @db.Uuid
+  user_id        String?             @db.Uuid
+  crew_id        String?             @db.Uuid
+  period_id      String?             @db.Uuid
+  category_id    String?             @db.Uuid
+  amount         Decimal             @db.Decimal(15, 2)
+  type           String?             @db.VarChar(10) // IN / OUT
+  status         transaction_status? @default(PENDING)
+  reference_code String?             @unique @db.VarChar(100)
+  note           String?
+  
+  created_at     DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime            @updatedAt @db.Timestamptz(6)
+
+  transaction_categories transaction_categories? @relation(fields: [category_id], references: [id])
+  crews                  crews?                  @relation(fields: [crew_id], references: [id])
+  crew_periods           crew_periods?           @relation(fields: [period_id], references: [id])
+  users                  users?                  @relation(fields: [user_id], references: [id])
+}
+
+model crew_periods {
+  id                     String         @id @default(uuid()) @db.Uuid
+  crew_id                String?        @db.Uuid
+  name                   String         @db.VarChar(100)
+  start_date             DateTime       @db.Date
+  end_date               DateTime       @db.Date
+  min_amount_per_member  Decimal        @db.Decimal(15, 2)
+  is_active              Boolean?       @default(true)
+  created_at             DateTime       @default(now()) @db.Timestamptz(6)
+  
+  crews                  crews?         @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+  transactions           transactions[]
+}
+
+// --- CÁC BẢNG PHỤ GIỮ NGUYÊN NHƯNG TỐI ƯU UUID ---
+
+model activity_logs {
+  id         String   @id @default(uuid()) @db.Uuid
+  crew_id    String?  @db.Uuid
+  user_id    String?  @db.Uuid
+  action     String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  crews      crews?   @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+  users      users?   @relation(fields: [user_id], references: [id])
+}
+
+model invite_codes {
+  id          String    @id @default(uuid()) @db.Uuid
+  crew_id     String?   @db.Uuid
+  code        String    @unique @db.VarChar(10)
+  expires_at  DateTime? @db.Timestamptz(6)
+  usage_limit Int?      @default(1)
+  times_used  Int?      @default(0)
+  created_by  String?   @db.Uuid
+  users       users?    @relation(fields: [created_by], references: [id])
+  crews       crews?    @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+}
+
+model notifications {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String?  @db.Uuid
+  title      String   @db.VarChar(255)
+  content    String
+  is_read    Boolean? @default(false)
+  type       String?  @db.VarChar(50)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model story_comments {
+  id         String   @id @default(uuid()) @db.Uuid
+  story_id   String?  @db.Uuid
+  user_id    String?  @db.Uuid
+  content    String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  stories    stories? @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model story_likes {
+  story_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  stories    stories  @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([story_id, user_id])
+}
+
+model transaction_categories {
+  id           String         @id @default(uuid()) @db.Uuid
+  name         String         @db.VarChar(50)
+  type         String?        @db.VarChar(10)
+  transactions transactions[]
+}
+
+model user_settings {
+  user_id            String   @id @db.Uuid
+  language           String?  @default("vi") @db.VarChar(10)
+  theme              String?  @default("dark") @db.VarChar(10)
+  push_notifications Boolean? @default(true)
+  users              users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model sepay_webhook_logs {
+  id           String   @id @default(uuid()) @db.Uuid
+  payload      Json
+  processed_at DateTime @default(now()) @db.Timestamptz(6)
+}
