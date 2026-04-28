@@ -14,11 +14,17 @@ async function bootstrap() {
     },
   }));
   
-  app.enableCors();
+  // 💥 ĐÃ NÂNG CẤP KHIÊN CORS CHỐNG LỖI NETWORK ERROR
+  app.enableCors({
+    origin: '*', 
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
   
+  // 💥 CẤU HÌNH CỔNG CHO RAILWAY (Bạn đã làm rất chuẩn)
   const port = process.env.PORT || 3000;
-  
   await app.listen(port, '0.0.0.0'); 
+  
   console.log(`Khoang máy đang chạy tại Port: ${port}`);
 }
 bootstrap();
