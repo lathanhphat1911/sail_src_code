@@ -4,10 +4,39 @@ import { CreateCrewDto } from './dto/create-crew.dto';
 import { transaction_status } from '@prisma/client';
 import { CreateInviteDto } from './dto/invite.crew.dto';
 import { randomBytes } from 'crypto';
+import { Expo } from 'expo-server-sdk';
 
 @Injectable()
 export class CrewsService {
+  private expo = new Expo();
   constructor(private prisma: PrismaService) {}
+
+  private async notifyCaptain(crewId: string, memberId: string, amount: number) {
+    try {
+      const captainMembership = await this.prisma.memberships.findFirst({
+        where: { crew_id: crewId, role: 'CAPTAIN' },
+        include: { users: true }
+      });
+
+      const captainToken = captainMembership?.users?.expo_push_token;
+      if (!captainToken || !Expo.isExpoPushToken(captainToken)) return; // Bỏ qua nếu Captain chưa cài app/chưa có token
+
+      const member = await this.prisma.users.findUnique({ where: { id: memberId } });
+
+      const messages = [{
+        to: captainToken,
+        sound: 'default' as const,
+        title: 'Ting Ting! Tiền vào quỹ 💰',
+        body: `Thuyền viên ${member?.full_name || 'Ai đó'} vừa đóng ${amount.toLocaleString('vi-VN')}đ.`,
+        data: { crewId: crewId },
+      }];
+
+      await this.expo.sendPushNotificationsAsync(messages);
+      console.log('📡 Đã bắn tín hiệu cho Thuyền trưởng!');
+    } catch (error) {
+      console.error('Lỗi bắn radar:', error);
+    }
+  }
 
   async findAll() {
     const crews = await this.prisma.crews.findMany({
@@ -316,58 +345,6 @@ export class CrewsService {
     }));
   }
 
-  async handleSePayWebhook(data: any) {
-    const { transferAmount, content, referenceCode, transferType } = data;
-
-    if (transferType !== 'in') return { message: 'Bỏ qua giao dịch rút tiền' };
-
-    const existingTx = await this.prisma.transactions.findUnique({
-      where: { id: referenceCode } 
-    });
-    if (existingTx) return { message: 'Giao dịch đã được xử lý' };
-
-    const match = content.match(/SAIL\s+([A-Za-z0-9\-]+)\s+([A-Za-z0-9\-]+)/i);
-    
-    if (!match) {
-      console.log('Giao dịch không hợp lệ/Không tìm thấy cú pháp SAIL:', content);
-      return { message: 'Không đúng cú pháp, bỏ qua' };
-    }
-
-    const crewId = match[1];
-    const userId = match[2];
-
-    await this.prisma.$transaction(async (prisma) => {
-      await prisma.transactions.create({
-        data: {
-          id: referenceCode,
-          crew_id: crewId,
-          user_id: userId,
-          type: 'IN',
-          amount: Number(transferAmount),
-          note: content,
-          status: 'SUCCESS'
-        }
-      });
-
-      await prisma.crews.update({
-        where: { id: crewId },
-        data: { total_balance: { increment: Number(transferAmount) } }
-      });
-
-      await prisma.memberships.updateMany({
-        where: { 
-          crew_id: crewId, 
-          user_id: userId 
-        },
-        data: { 
-          total_contribution: { increment: Number(transferAmount) } 
-        }
-      });
-    });
-
-    return { success: true, message: 'Đã gạch nợ thành công!' };
-  }
-
   async reportDeposit(crewId: string, userId: string, amount: number) {
     // 💥 1. Tìm kỳ hạn đang mở
     const activePeriod = await this.prisma.crew_periods.findFirst({
@@ -448,6 +425,8 @@ export class CrewsService {
         },
         data: { total_contribution: { increment: safeAmount } }
       });
+
+      this.notifyCaptain(safeCrewId, safeUserId, safeAmount);
 
       return updatedTx;
     });

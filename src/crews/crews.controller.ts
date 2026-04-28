@@ -53,20 +53,6 @@ export class CrewsController {
     return this.crewsService.createInviteCode(req.user.userId, crewId, dto);
   }
 
-  @Post('webhook/sepay')
-  async sepayWebhook(
-    @Headers('Authorization') authHeader: string,
-    @Body() body: any
-  ) {
-    const SEPAY_TOKEN = '4RYVSPRDT9OVBGRX1VTXXDLZEA5WSHQWQPYOQM4V8TNSB2I5WKBTJKI2RELYKNPQ';
-    if (authHeader !== SEPAY_TOKEN) {
-      throw new UnauthorizedException('Kẻ gian đột nhập!');
-    }
-
-    const data = body.data ? body.data : body; 
-    return this.crewsService.handleSePayWebhook(data);
-  }
-
   @UseGuards(AuthGuard('jwt'))
   @Get('invite/:code') 
     async getInvitePreview(@Param('code') code: string) {
