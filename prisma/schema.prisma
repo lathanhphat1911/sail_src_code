@@ -50,6 +50,7 @@ model users {
   bio            String?
   is_active      Boolean?  @default(true)
   refresh_token  String?
+  expo_push_token String?
   
   created_at     DateTime  @default(now()) @db.Timestamptz(6)
   updated_at     DateTime  @updatedAt @db.Timestamptz(6)
@@ -95,6 +96,7 @@ model crews {
   total_balance Decimal?  @default(0.00) @db.Decimal(15, 2)
   currency      String?   @default("VND") @db.VarChar(10)
   color         String?   @default("#2563eb")
+  avatar_url      String?
   
   created_at    DateTime  @default(now()) @db.Timestamptz(6)
   updated_at    DateTime  @updatedAt @db.Timestamptz(6)
