@@ -123,6 +123,7 @@ model memberships {
   updated_at DateTime          @updatedAt @db.Timestamptz(6)
   kicked_at  DateTime?         @db.Timestamptz(6) // Lưu vết khi bị kick
   total_contribution Decimal?  @default(0.00) @db.Decimal(15, 2)
+  created_at DateTime @default(now())
 
   crews      crews?            @relation(fields: [crew_id], references: [id], onDelete: Cascade)
   users      users?            @relation(fields: [user_id], references: [id], onDelete: Cascade)

@@ -51,7 +51,6 @@ export class CrewPeriodsService {
       include: { users: true }
     });
 
-    // Vét toàn bộ giao dịch SUCCESS và PENDING lên
     const transactions = await this.prisma.transactions.findMany({
       where: { 
         crew_id: crewId, 
@@ -62,37 +61,40 @@ export class CrewPeriodsService {
     const now = new Date();
 
     return periods.map(period => {
-      // Xác định kỳ hiện tại
       const isCurrent = period.start_date <= now && period.end_date >= now;
 
+      // 🔥 CHIA LẠI TIỀN CHO TỪNG KỲ (Bám theo số lượng member)
+      const memberCount = memberships.length || 1;
+      const actualMinPerMember = Math.ceil(Number(period.min_amount_per_member) / memberCount);
+
       const members = memberships.map(m => {
-        // 💥 1. BẢO MẬT TUYỆT ĐỐI: Lọc bằng period_id và JS, từ bỏ lọc ngày tháng!
         const userTxs = transactions.filter(tx => 
           tx.user_id === m.user_id && 
           String(tx.type).trim().toUpperCase() === 'DEPOSIT' &&
-          tx.period_id === period.id // Ghép thẳng ID kỳ hạn
+          tx.period_id === period.id 
         );
 
-        // Tính tiền ĐÃ DUYỆT (SUCCESS)
         const paidAmount = userTxs
           .filter(tx => tx.status === 'SUCCESS')
           .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
-        // 💥 2. NÂNG CẤP MẢNG CHỜ DUYỆT (PENDING)
         const pendingTxsRaw = userTxs.filter(tx => tx.status === 'PENDING');
         const pendingAmount = pendingTxsRaw.reduce((sum, tx) => sum + Number(tx.amount), 0);
         
-        // Trả về một mảng Object chi tiết để Frontend map ra từng dòng
         const pendingTxs = pendingTxsRaw.map(tx => ({
           id: tx.id,
           amount: Number(tx.amount),
           date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('vi-VN') : 'Vừa xong'
         }));
 
-        // Random màu Avatar
         const colors = ['#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#3b82f6', '#ec4899'];
         const nameStr = m.users?.full_name || 'Thủy thủ ẩn danh';
         const colorIndex = nameStr.charCodeAt(0) % colors.length;
+
+        const joinDate = m.created_at || new Date(); 
+        const isJoinedLate = period.end_date && joinDate > period.end_date;
+
+        const requiredAmount = isJoinedLate ? 0 : actualMinPerMember;
 
         return {
           id: m.user_id,
@@ -101,7 +103,9 @@ export class CrewPeriodsService {
           avatarColor: colors[colorIndex], 
           paidAmount: paidAmount,
           pendingAmount: pendingAmount, 
-          pendingTxs: pendingTxs 
+          pendingTxs: pendingTxs,
+          isJoinedLate: isJoinedLate, // Cờ báo cho Frontend
+          requiredAmount: requiredAmount // Chỉ tiêu thực tế
         };
       });
 
@@ -109,10 +113,11 @@ export class CrewPeriodsService {
         id: period.id,
         name: period.name,
         deadline: period.end_date ? new Date(period.end_date).toLocaleDateString('vi-VN') : 'Không có hạn',
-        minAmount: Number(period.min_amount_per_member),
+        minAmount: actualMinPerMember,
         isCurrent: isCurrent,
         members: members
       };
     });
   }
+  
 }

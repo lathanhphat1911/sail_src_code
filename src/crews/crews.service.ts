@@ -220,6 +220,7 @@ export class CrewsService {
   }
 
   async getDetail(crewId: string) {
+    // 1. Kéo toàn bộ thông tin Hạm đội
     const crew = await this.prisma.crews.findUnique({
       where: { id: crewId },
       include: {
@@ -246,19 +247,31 @@ export class CrewsService {
 
     if (!crew) throw new NotFoundException('Không tìm thấy hạm đội');
 
+    // 2. Lấy thông tin Kỳ hạn hiện hành
     const now = new Date();
     const currentPeriod = crew.crew_periods.find(p => p.end_date >= now) || crew.crew_periods[0];
+    
+    // 🔥 LOGIC CHIA ĐỀU TIỀN:
+    const totalGoal = Number(crew.goal || 0);
+    const periodsCount = crew.crew_periods.length || 1;
+    const memberCount = crew.memberships.length || 1; 
+    
+    // Tính số tiền thực tế mỗi người cần đóng (Làm tròn lên)
+    const actualMinPerMember = Math.ceil(totalGoal / (periodsCount * memberCount));
+
+    // 3. Tính toán thông tin thành viên
     const membersData = await Promise.all(crew.memberships.map(async (member) => {
       let periodContribution = 0;
       
       if (currentPeriod) {
+        // Lấy tổng tiền ĐÃ DUYỆT của user trong kỳ hiện tại
         const periodTx = await this.prisma.transactions.aggregate({
           where: {
             crew_id: crewId,
             user_id: member.user_id,
             status: 'SUCCESS',
             type: 'DEPOSIT',
-            created_at: { gte: currentPeriod.start_date, lte: currentPeriod.end_date }
+            period_id: currentPeriod.id // Lọc chuẩn bằng ID kỳ hạn
           },
           _sum: { amount: true }
         });
@@ -271,15 +284,15 @@ export class CrewsService {
         role: member.role,
         totalContribution: Number(member.total_contribution || 0),
         periodContribution: periodContribution,
-        color: '#3b82f6', // Màu mặc định (có thể random hoặc lấy từ bảng users)
+        color: '#3b82f6', // Có thể random màu nếu thích
       };
     }));
 
     // 4. Định dạng Nhật ký giao dịch
     const logsData = crew.transactions.map(tx => ({
       id: tx.id,
-      action: tx.type === 'IN' ? 'deposit' : 'withdraw',
-      note: tx.note || (tx.type === 'IN' ? 'Đóng quỹ' : 'Chi quỹ'),
+      action: tx.type === 'IN' || tx.type === 'DEPOSIT' ? 'deposit' : 'withdraw',
+      note: tx.note || (tx.type === 'IN' || tx.type === 'DEPOSIT' ? 'Đóng quỹ' : 'Chi quỹ'),
       user: tx.users?.full_name || 'Hệ thống',
       date: tx.created_at.toISOString().split('T')[0], // YYYY-MM-DD
       amount: Number(tx.amount),
@@ -290,13 +303,13 @@ export class CrewsService {
       id: crew.id,
       name: crew.name,
       balance: Number(crew.total_balance || 0),
-      goal: Number(crew.goal || 0),
-      periodsCount: crew.crew_periods.length, // 💥 CỰC KỲ QUAN TRỌNG ĐỂ FE CHECK
+      goal: totalGoal,
+      periodsCount: periodsCount, 
       currentPeriod: currentPeriod ? {
         id: currentPeriod.id,
         name: currentPeriod.name,
         deadline: currentPeriod.end_date.toISOString().split('T')[0],
-        minAmount: Number(currentPeriod.min_amount_per_member || 0)
+        minAmount: actualMinPerMember // Trả về số tiền đã chia đều
       } : null,
       members: membersData,
       logs: logsData,
