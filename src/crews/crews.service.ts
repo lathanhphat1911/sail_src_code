@@ -26,7 +26,7 @@ export class CrewsService {
       const messages = [{
         to: captainToken,
         sound: 'default' as const,
-        title: 'Ting Ting! Tiền vào quỹ 💰',
+        title: 'Ting Ting! Tiền vào quỹ',
         body: `Thuyền viên ${member?.full_name || 'Ai đó'} vừa đóng ${amount.toLocaleString('vi-VN')}đ.`,
         data: { crewId: crewId },
       }];

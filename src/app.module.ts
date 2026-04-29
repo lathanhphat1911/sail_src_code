@@ -9,9 +9,10 @@ import { AuthModule } from './auth/auth.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { CrewPeriodsModule } from './crew-periods/crew-periods.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { StoriesModule } from './stories/stories.module';
 
 @Module({
-  imports: [CrewsModule, PrismaModule, UsersModule, AuthModule, BankAccountsModule, CrewPeriodsModule, ScheduleModule.forRoot()],
+  imports: [CrewsModule, PrismaModule, UsersModule, AuthModule, BankAccountsModule, CrewPeriodsModule, ScheduleModule.forRoot(), StoriesModule],
   controllers: [AppController],
   providers: [AppService, PrismaService],
 })
