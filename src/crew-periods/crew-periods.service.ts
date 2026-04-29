@@ -77,9 +77,7 @@ export class CrewPeriodsService {
       // 🔥 CHÌA KHÓA: Chỉ đếm những người vào nhóm TRƯỚC KHI kỳ này bắt đầu
       const activeMembers = memberships.filter(m => {
         const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
-        // Kỳ 1 (index 0) du di 24h để tính các founding members lúc vừa tạo nhóm
-        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0; 
-        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        const periodStart = new Date(period.start_date).getTime(); // 💥 XÓA GRACE PERIOD
         return joinDate <= periodStart;
       });
 
@@ -121,8 +119,7 @@ export class CrewPeriodsService {
 
         // Cờ báo hiệu cho UI biết thằng này nhảy dù vào giữa chừng
         const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
-        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0;
-        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        const periodStart = new Date(period.start_date).getTime(); // 💥 XÓA GRACE PERIOD
         const isJoinedLate = joinDate > periodStart;
 
         // 💥 BƯỚC 2: Tính số tiền thực tế nộp VÀO ĐÚNG KỲ NÀY

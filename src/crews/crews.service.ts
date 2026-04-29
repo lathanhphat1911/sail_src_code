@@ -264,8 +264,8 @@ export class CrewsService {
       cumulativeGoal += periodTotalGoal;
       const activeMembers = crew.memberships.filter(m => {
         const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
-        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0;
-        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        
+        const periodStart = new Date(period.start_date).getTime(); 
         return joinDate <= periodStart;
       });
 
