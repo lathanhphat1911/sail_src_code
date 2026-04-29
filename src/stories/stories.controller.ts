@@ -16,7 +16,7 @@ export class StoriesController {
     
     console.log("Thông tin Token giải mã được:", req.user);
 
-    const userId = req.user?.id || req.user?.sub; 
+    const userId = req.user?.userId; 
 
     if (!userId) {
       throw new UnauthorizedException('Không tìm thấy thông tin Thuyền trưởng. Vui lòng đăng nhập lại!');
