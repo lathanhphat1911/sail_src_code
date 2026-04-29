@@ -51,7 +51,6 @@ export class CrewPeriodsService {
       include: { users: true }
     });
 
-    // Tối ưu: Chỉ lấy các giao dịch nạp tiền (DEPOSIT / IN)
     const transactions = await this.prisma.transactions.findMany({
       where: { 
         crew_id: crewId, 
@@ -60,7 +59,6 @@ export class CrewPeriodsService {
       }
     });
 
-    // 1. Tính toán Tổng mục tiêu CỦA MỖI KỲ (periodTotalGoal)
     const crew = await this.prisma.crews.findUnique({
       where: { id: crewId },
       select: { goal: true }
@@ -69,66 +67,68 @@ export class CrewPeriodsService {
     const periodsCount = periods.length || 1;
     const periodTotalGoal = totalGoal / periodsCount; 
 
-    // 2. TÍNH TOÁN CÔNG BẰNG LUỸ KẾ (CUMULATIVE FAIR SHARE)
+    // 💥 1. TÍNH TOÁN CÔNG BẰNG LUỸ KẾ (ĐÃ FIX LOGIC THÀNH VIÊN VÀO SAU)
     let cumulativeGoal = 0;
     const cumFairShares: Map<string, number>[] = []; 
 
-    periods.forEach((period) => {
+    periods.forEach((period, index) => {
       cumulativeGoal += periodTotalGoal;
 
-      // Tìm những người đã join tính đến lúc kỳ này kết thúc
+      // 🔥 CHÌA KHÓA: Chỉ đếm những người vào nhóm TRƯỚC KHI kỳ này bắt đầu
       const activeMembers = memberships.filter(m => {
-        const joinDate = (m as any).created_at || new Date();
-        return !period.end_date || joinDate <= period.end_date;
+        const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
+        // Kỳ 1 (index 0) du di 24h để tính các founding members lúc vừa tạo nhóm
+        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0; 
+        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        return joinDate <= periodStart;
       });
 
-      const activeCount = activeMembers.length || 1;
+      // Nếu không có ai (do data cũ lỗi thiếu created_at), vớt tất cả vào
+      const finalActiveMembers = activeMembers.length > 0 ? activeMembers : memberships;
+      const activeCount = finalActiveMembers.length || 1;
       const fairShare = cumulativeGoal / activeCount;
 
       const userShares = new Map<string, number>();
       memberships.forEach(m => {
-        const joinDate = (m as any).created_at || new Date();
-        const isJoinedLate = period.end_date && joinDate > period.end_date;
-        // Nếu vào sau khi kỳ kết thúc -> Mục tiêu kỳ đó = 0
-        userShares.set(m.user_id, isJoinedLate ? 0 : fairShare);
+        const isActiveForThisPeriod = finalActiveMembers.some(activeM => activeM.user_id === m.user_id);
+        // Nếu không active (vào sau), mục tiêu kỳ này = 0đ
+        userShares.set(m.user_id, isActiveForThisPeriod ? fairShare : 0);
       });
       cumFairShares.push(userShares);
     });
 
     const now = new Date();
-    
-    // 💥 BIẾN LƯU SỐ DƯ THỪA ĐỂ CHUYỂN TIẾP (BRINGOVER)
     let userSurplus = new Map<string, number>(); 
 
     return periods.map((period, index) => {
       const isCurrent = period.start_date <= now && period.end_date >= now;
 
-      // Chỉ tiêu hiển thị ở Header (VD: Mục tiêu 166.667đ/người)
-      const activeMembers = memberships.filter(m => {
-        const joinDate = (m as any).created_at || new Date();
-        return !period.end_date || joinDate <= period.end_date;
-      });
-      const periodDisplayMinAmount = Math.ceil(periodTotalGoal / (activeMembers.length || 1));
+      // Tính Mức tối thiểu để show trên Header UI
+      let periodDisplayMinAmount = 0;
+      if (cumFairShares.length > 0) {
+          // Lấy đại mức share của 1 thằng active để show
+          periodDisplayMinAmount = Math.ceil((cumFairShares[index].get(memberships[0].user_id) || 0) - (index === 0 ? 0 : (cumFairShares[index-1].get(memberships[0].user_id) || 0)));
+      }
 
       const members = memberships.map(m => {
         const userId = m.user_id;
 
-        // 💥 BƯỚC 1: Tính số tiền BẮT BUỘC ĐÓNG CỦA KỲ NÀY (Nhảy vọt cho người mới, giảm cho người cũ)
+        // 💥 BƯỚC 1: Tính số tiền BẮT BUỘC ĐÓNG CỦA KỲ NÀY 
         const currentCumShare = cumFairShares[index].get(userId) || 0;
         const prevCumShare = index === 0 ? 0 : (cumFairShares[index - 1].get(userId) || 0);
         let baseRequired = Math.ceil(currentCumShare - prevCumShare);
         if (baseRequired < 0) baseRequired = 0;
 
-        const joinDate = (m as any).created_at || new Date();
-        const isJoinedLate = period.end_date && joinDate > period.end_date;
+        // Cờ báo hiệu cho UI biết thằng này nhảy dù vào giữa chừng
+        const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
+        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0;
+        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        const isJoinedLate = joinDate > periodStart;
 
         // 💥 BƯỚC 2: Tính số tiền thực tế nộp VÀO ĐÚNG KỲ NÀY
         const userTxs = transactions.filter(tx => tx.user_id === userId && tx.period_id === period.id);
-
-        const paidInThisPeriod = userTxs
-          .filter(tx => tx.status === 'SUCCESS')
-          .reduce((sum, tx) => sum + Number(tx.amount), 0);
-
+        const paidInThisPeriod = userTxs.filter(tx => tx.status === 'SUCCESS').reduce((sum, tx) => sum + Number(tx.amount), 0);
+        
         const pendingTxsRaw = userTxs.filter(tx => tx.status === 'PENDING');
         const pendingAmount = pendingTxsRaw.reduce((sum, tx) => sum + Number(tx.amount), 0);
         const pendingTxs = pendingTxsRaw.map(tx => ({
@@ -148,7 +148,6 @@ export class CrewPeriodsService {
         }
         userSurplus.set(userId, newSurplus); 
 
-        // UI Colors
         const colors = ['#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#3b82f6', '#ec4899'];
         const nameStr = m.users?.full_name || 'Thủy thủ ẩn danh';
         const colorIndex = nameStr.charCodeAt(0) % colors.length;
@@ -158,11 +157,11 @@ export class CrewPeriodsService {
           name: nameStr,
           role: m.role,
           avatarColor: colors[colorIndex],
-          paidAmount: effectivePaid,    // Hiển thị số tiền gộp (Đã đóng + Dư chuyển sang)
+          paidAmount: effectivePaid,    
           pendingAmount: pendingAmount,
           pendingTxs: pendingTxs,
           isJoinedLate: isJoinedLate,   
-          requiredAmount: baseRequired  // Mục tiêu đã được điều chỉnh bù trừ
+          requiredAmount: baseRequired  // Sẽ là 0đ cho Bình Minh ở Kỳ 1, và 400k ở Kỳ 2
         };
       });
 
@@ -176,5 +175,4 @@ export class CrewPeriodsService {
       };
     });
   }
-  
 }

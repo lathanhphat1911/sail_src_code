@@ -225,12 +225,8 @@ export class CrewsService {
       where: { id: crewId },
       include: {
         bank_accounts: true,
-        crew_periods: {
-          orderBy: { start_date: 'asc' } 
-        },
-        memberships: {
-          include: { users: true } 
-        },
+        crew_periods: { orderBy: { start_date: 'asc' } },
+        memberships: { include: { users: true } },
         transactions: {
           where: { status: 'SUCCESS' },
           orderBy: { created_at: 'desc' },
@@ -247,58 +243,116 @@ export class CrewsService {
 
     if (!crew) throw new NotFoundException('Không tìm thấy hạm đội');
 
-    // 2. Lấy thông tin Kỳ hạn hiện hành
-    const now = new Date();
-    const currentPeriod = crew.crew_periods.find(p => p.end_date >= now) || crew.crew_periods[0];
-    
-    // 🔥 LOGIC CHIA ĐỀU TIỀN:
+    // 🔥 KÉO TOÀN BỘ GIAO DỊCH NẠP TIỀN ĐỂ TÍNH LUỸ KẾ
+    const allDeposits = await this.prisma.transactions.findMany({
+      where: {
+        crew_id: crewId,
+        status: 'SUCCESS',
+        type: { in: ['DEPOSIT', 'IN'] }
+      }
+    });
+
     const totalGoal = Number(crew.goal || 0);
     const periodsCount = crew.crew_periods.length || 1;
-    const memberCount = crew.memberships.length || 1; 
-    
-    // Tính số tiền thực tế mỗi người cần đóng (Làm tròn lên)
-    const actualMinPerMember = Math.ceil(totalGoal / (periodsCount * memberCount));
+    const periodTotalGoal = totalGoal / periodsCount;
 
-    // 3. Tính toán thông tin thành viên
-    const membersData = await Promise.all(crew.memberships.map(async (member) => {
-      let periodContribution = 0;
-      
-      if (currentPeriod) {
-        // Lấy tổng tiền ĐÃ DUYỆT của user trong kỳ hiện tại
-        const periodTx = await this.prisma.transactions.aggregate({
-          where: {
-            crew_id: crewId,
-            user_id: member.user_id,
-            status: 'SUCCESS',
-            type: 'DEPOSIT',
-            period_id: currentPeriod.id // Lọc chuẩn bằng ID kỳ hạn
-          },
-          _sum: { amount: true }
-        });
-        periodContribution = Number(periodTx._sum.amount || 0);
-      }
+    // 2. TÍNH FAIR SHARE LUỸ KẾ CHO TẤT CẢ CÁC KỲ
+    let cumulativeGoal = 0;
+    const cumFairShares: Map<string, number>[] = [];
 
+    crew.crew_periods.forEach((period, index) => {
+      cumulativeGoal += periodTotalGoal;
+      const activeMembers = crew.memberships.filter(m => {
+        const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
+        const gracePeriod = index === 0 ? 24 * 60 * 60 * 1000 : 0;
+        const periodStart = new Date(period.start_date).getTime() + gracePeriod;
+        return joinDate <= periodStart;
+      });
+
+      const finalActiveMembers = activeMembers.length > 0 ? activeMembers : crew.memberships;
+      const fairShare = cumulativeGoal / (finalActiveMembers.length || 1);
+
+      const userShares = new Map<string, number>();
+      crew.memberships.forEach(m => {
+        const isActive = finalActiveMembers.some(activeM => activeM.user_id === m.user_id);
+        userShares.set(m.user_id, isActive ? fairShare : 0);
+      });
+      cumFairShares.push(userShares);
+    });
+
+    // 3. TÌM KỲ HIỆN TẠI VÀ QUÉT SỐ DƯ (BRINGOVER) TỚI KỲ ĐÓ
+    const now = new Date();
+    let targetPeriodIndex = crew.crew_periods.findIndex(p => p.end_date >= now);
+    if (targetPeriodIndex === -1) targetPeriodIndex = crew.crew_periods.length - 1;
+    const currentPeriod = crew.crew_periods[targetPeriodIndex];
+
+    let userSurplus = new Map<string, number>();
+    const requiredForCurrent = new Map<string, number>();
+    const effectivePaidForCurrent = new Map<string, number>();
+
+    // Chạy vòng lặp từ kỳ 1 đến kỳ hiện tại để tính dồn tiền dư
+    for (let i = 0; i <= targetPeriodIndex; i++) {
+      const period = crew.crew_periods[i];
+      crew.memberships.forEach(m => {
+        const userId = m.user_id;
+        const currentCumShare = cumFairShares[i].get(userId) || 0;
+        const prevCumShare = i === 0 ? 0 : (cumFairShares[i - 1].get(userId) || 0);
+        let baseRequired = Math.ceil(currentCumShare - prevCumShare);
+        if (baseRequired < 0) baseRequired = 0;
+
+        const paidInThisPeriod = allDeposits
+          .filter(tx => tx.user_id === userId && tx.period_id === period.id)
+          .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+        const surplusFromPrev = userSurplus.get(userId) || 0;
+        const effectivePaid = paidInThisPeriod + surplusFromPrev;
+
+        let newSurplus = 0;
+        if (effectivePaid > baseRequired) {
+          newSurplus = effectivePaid - baseRequired;
+        }
+        userSurplus.set(userId, newSurplus);
+
+        // Lưu lại kết quả của kỳ hiện tại để ném ra FE
+        if (i === targetPeriodIndex) {
+          requiredForCurrent.set(userId, baseRequired);
+          effectivePaidForCurrent.set(userId, effectivePaid);
+        }
+      });
+    }
+
+    // Tính mức tối thiểu hiển thị trên Header của Tổng quan
+    let periodDisplayMinAmount = 0;
+    if (cumFairShares.length > 0 && crew.memberships.length > 0) {
+      periodDisplayMinAmount = Math.ceil(
+        (cumFairShares[targetPeriodIndex].get(crew.memberships[0].user_id) || 0) - 
+        (targetPeriodIndex === 0 ? 0 : (cumFairShares[targetPeriodIndex - 1].get(crew.memberships[0].user_id) || 0))
+      );
+    }
+
+    // 4. MAP DỮ LIỆU THÀNH VIÊN
+    const membersData = crew.memberships.map(member => {
       return {
         id: member.user_id,
         name: member.users?.full_name || 'Thủy thủ ẩn danh',
         role: member.role,
         totalContribution: Number(member.total_contribution || 0),
-        periodContribution: periodContribution,
-        color: '#3b82f6', // Có thể random màu nếu thích
+        periodContribution: effectivePaidForCurrent.get(member.user_id) || 0, // Đã cộng dồn tiền dư
+        requiredAmount: requiredForCurrent.get(member.user_id) || 0, // 💥 BIẾN MỚI CHO FRONTEND
+        color: '#3b82f6',
       };
-    }));
+    });
 
-    // 4. Định dạng Nhật ký giao dịch
+    // 5. MAP LOGS VÀ TRẢ VỀ
     const logsData = crew.transactions.map(tx => ({
       id: tx.id,
       action: tx.type === 'IN' || tx.type === 'DEPOSIT' ? 'deposit' : 'withdraw',
       note: tx.note || (tx.type === 'IN' || tx.type === 'DEPOSIT' ? 'Đóng quỹ' : 'Chi quỹ'),
       user: tx.users?.full_name || 'Hệ thống',
-      date: tx.created_at.toISOString().split('T')[0], // YYYY-MM-DD
+      date: tx.created_at.toISOString().split('T')[0],
       amount: Number(tx.amount),
     }));
 
-    // 5. Trả về format chuẩn cho Frontend
     return {
       id: crew.id,
       name: crew.name,
@@ -309,7 +363,7 @@ export class CrewsService {
         id: currentPeriod.id,
         name: currentPeriod.name,
         deadline: currentPeriod.end_date.toISOString().split('T')[0],
-        minAmount: actualMinPerMember // Trả về số tiền đã chia đều
+        minAmount: periodDisplayMinAmount
       } : null,
       members: membersData,
       logs: logsData,
