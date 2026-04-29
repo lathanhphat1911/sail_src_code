@@ -271,24 +271,26 @@ export class CrewsService {
 
     crew.crew_periods.forEach((period, index) => {
       cumulativeGoal += periodTotalGoal;
-      const periodStart = new Date(period.start_date).getTime();
       
-      console.log(`\n--- Xét ${period.name} (Start: ${new Date(period.start_date).toISOString()}) ---`);
+      // 🔥 THUẬT TOÁN CHỐT SỔ: Tìm người nộp tiền đầu tiên của kỳ này
+      const pTxs = allDeposits.filter(tx => tx.period_id === period.id);
+      
+      // Mặc định: Cuối ngày của ngày bắt đầu
+      let cutoffTime = new Date(period.start_date).getTime() + (24 * 60 * 60 * 1000); 
+
+      if (pTxs.length > 0) {
+        // Nếu có người nộp, CHỐT SỔ ngay tại lúc giao dịch đầu tiên diễn ra (+1 phút du di)
+        const earliestTxTime = Math.min(...pTxs.map(t => new Date(t.created_at).getTime()));
+        cutoffTime = earliestTxTime + 60000; 
+      }
 
       const activeMembers = crew.memberships.filter(m => {
-        const joinDateObj = (m as any).created_at ? new Date((m as any).created_at) : new Date();
-        const joinDate = joinDateObj.getTime();
-        
-        const isActive = joinDate <= periodStart;
-        console.log(` + ${m.users?.full_name}: joinDate(${joinDateObj.toISOString()}) <= periodStart ? => ${isActive}`);
-        
-        return isActive;
+        const joinDate = (m as any).created_at ? new Date((m as any).created_at).getTime() : new Date().getTime();
+        return joinDate <= cutoffTime; // So với giờ chốt sổ
       });
 
       const finalActiveMembers = activeMembers.length > 0 ? activeMembers : crew.memberships;
       const fairShare = cumulativeGoal / (finalActiveMembers.length || 1);
-      
-      console.log(` => Số active members: ${finalActiveMembers.length} | Luỹ kế: ${cumulativeGoal} | FairShare: ${fairShare}`);
 
       const userShares = new Map<string, number>();
       crew.memberships.forEach(m => {
