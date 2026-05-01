@@ -36,16 +36,7 @@ export class StoriesController {
 
   @UseGuards(AuthGuard('jwt')) 
   @Post(':crewId')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: './uploads/stories', 
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = extname(file.originalname);
-        cb(null, `story-${uniqueSuffix}${ext}`);
-      }
-    })
-  }))
+  @UseInterceptors(FileInterceptor('file')) 
   async createStory(
     @Param('crewId') crewId: string,
     @Request() req,
@@ -54,14 +45,8 @@ export class StoriesController {
   ) {
     const userId = req.user?.id || req.user?.userId || req.user?.sub;
 
-    if (!userId) {
-      throw new BadRequestException('Không lấy được User ID từ Token!');
-    }
-
-    // Nếu không cấu hình storage ở trên, biến file chỗ này sẽ là undefined đó!
-    if (!file) {
-      throw new BadRequestException('Không tìm thấy file ảnh được gửi lên!');
-    }
+    if (!userId) throw new BadRequestException('Không lấy được User ID từ Token!');
+    if (!file) throw new BadRequestException('Không tìm thấy file ảnh được gửi lên!');
 
     return this.storiesService.createStory(crewId, userId, file, caption);
   }

@@ -2,11 +2,15 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { PrismaService } from '../prisma.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 
 @Injectable()
 export class StoriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinary: CloudinaryService
+  ) {}
   create(createStoryDto: CreateStoryDto) {
     return 'This action adds a new story';
   }
@@ -70,17 +74,17 @@ export class StoriesService {
       where: { crew_id: crewId, user_id: userId, status: 'ACTIVE' }
     });
 
-    if (!membership) {
-      throw new BadRequestException('Bạn không thuộc hạm đội này để đăng khoảnh khắc');
-    }
+    if (!membership) throw new BadRequestException('Bạn không thuộc hạm đội này để đăng khoảnh khắc');
 
-    const mediaUrl = `/uploads/stories/${file.filename}`;
+    const uploadedFile = await this.cloudinary.uploadImage(file);
+    
+    const mediaUrl = uploadedFile.secure_url;
 
     const newStory = await this.prisma.stories.create({
       data: {
         crew_id: crewId,
         user_id: userId,
-        media_url: mediaUrl,
+        media_url: mediaUrl, 
         caption: caption || '',
         status: 'ACTIVE',
       },
