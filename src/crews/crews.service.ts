@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateCrewDto } from './dto/create-crew.dto';
-import { transaction_status } from '@prisma/client';
 import { CreateInviteDto } from './dto/invite.crew.dto';
 import { randomBytes } from 'crypto';
 import { Expo } from 'expo-server-sdk';

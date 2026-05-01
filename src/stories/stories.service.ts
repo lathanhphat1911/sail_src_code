@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { PrismaService } from '../prisma.service';
@@ -37,32 +37,58 @@ export class StoriesService {
     // Lấy ra mảng các ID của hạm đội
     const myCrewIds = myMemberships.map(m => m.crew_id);
 
-    if (myCrewIds.length === 0) return []; // Chưa vào nhóm nào thì feed trống
+    if (myCrewIds.length === 0) return [];
 
-    // 2. Kéo tất cả bài viết thuộc các nhóm đó
+    // 2. Kéo tất cả bài viết thuộc các nhóm
     const feed = await this.prisma.stories.findMany({
       where: {
         crew_id: { in: myCrewIds },
-        status: 'ACTIVE' // Lọc các bài chưa bị xóa
+        status: 'ACTIVE'
       },
       include: {
-        users: { select: { full_name: true, avatar_url: true } }, // Info người đăng
-        crews: { select: { name: true, color: true } }            // Info nhóm
+        users: { select: { full_name: true, avatar_url: true } },
+        crews: { select: { name: true, color: true } }           
       },
-      orderBy: { created_at: 'desc' }, // Mới nhất lên đầu
-      take: 20 // Lấy tạm 20 bài gần nhất (phân trang tính sau cho đỡ rối)
+      orderBy: { created_at: 'desc' }, 
+      take: 20 
     });
 
-    // 3. Format lại dữ liệu cho Frontend dễ đọc
     return feed.map(post => ({
       id: post.id,
       crewName: post.crews?.name,
       userName: post.users?.full_name || 'Ẩn danh',
-      avatar: post.crews?.color || '#3b82f6', // Lấy màu nhóm làm màu avatar tạm
+      avatar: post.crews?.color || '#3b82f6', 
       image: post.media_url,
       caption: post.caption,
-      comments: 0, // Nếu mày có bảng comments thì query thêm đếm vào đây
+      comments: 0,
       createdAt: post.created_at
     }));
+  }
+
+  async createStory(crewId: string, userId: string, file: Express.Multer.File, caption: string) {
+    const membership = await this.prisma.memberships.findFirst({
+      where: { crew_id: crewId, user_id: userId, status: 'ACTIVE' }
+    });
+
+    if (!membership) {
+      throw new BadRequestException('Bạn không thuộc hạm đội này để đăng khoảnh khắc');
+    }
+
+    const mediaUrl = `/uploads/stories/${file.filename}`;
+
+    const newStory = await this.prisma.stories.create({
+      data: {
+        crew_id: crewId,
+        user_id: userId,
+        media_url: mediaUrl,
+        caption: caption || '',
+        status: 'ACTIVE',
+      },
+    });
+
+    return {
+      message: 'Đăng khoảnh khắc thành công',
+      data: newStory
+    };
   }
 }
