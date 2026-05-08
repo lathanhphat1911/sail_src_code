@@ -11,10 +11,9 @@ import { CrewPeriodsModule } from './crew-periods/crew-periods.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StoriesModule } from './stories/stories.module';
 import { AchievementsModule } from './achievements/achievements.module';
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { AdminModule } from '@adminjs/nestjs';
 import AdminJS from 'adminjs';
-import { Database, Resource, getModelByName } from '@adminjs/prisma';
+import { Database, Resource } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
 
 AdminJS.registerAdapter({
@@ -23,6 +22,8 @@ AdminJS.registerAdapter({
 });
 
 const prisma = new PrismaClient();
+const getModelByName = (modelName: string) =>
+  (prisma as any)._baseDmmf.modelMap[modelName];
 
 @Module({
   imports: [
@@ -82,4 +83,3 @@ const prisma = new PrismaClient();
   providers: [AppService, PrismaService],
 })
 export class AppModule {}
-/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */

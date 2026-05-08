@@ -10,6 +10,10 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@adminjs/nestjs": ["node_modules/@adminjs/nestjs/types/index.d.ts"],
+      "@adminjs/prisma": ["node_modules/@adminjs/prisma/lib/index.d.ts"]
+    },
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": true,
