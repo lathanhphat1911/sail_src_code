@@ -24,7 +24,7 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
     transform: true,
     exceptionFactory: (errors) => {
-      console.log('❌ Lỗi Validation tại Backend:', JSON.stringify(errors, null, 2));
+      console.log('Lỗi Validation tại Backend:', JSON.stringify(errors, null, 2));
       return new BadRequestException(errors);
     },
   }));

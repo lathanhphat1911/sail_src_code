@@ -65,6 +65,23 @@ const getModelByName = (modelName: string) => {
               resource: { model: getModelByName('crews'), client: prisma },
               options: { navigation: 'Quản lý Hạm đội' },
             },
+            // 👇 THÊM TẤT CẢ CÁC BẢNG CÒN LẠI VÀO ĐÂY
+            {
+              resource: { model: getModelByName('achievements'), client: prisma },
+              options: { navigation: 'Quản lý Hệ thống' },
+            },
+            {
+              resource: { model: getModelByName('stories'), client: prisma },
+              options: { navigation: 'Quản lý Hoạt động' },
+            },
+            {
+              resource: { model: getModelByName('bank_accounts'), client: prisma },
+              options: { navigation: 'Quản lý Tài chính' },
+            },
+            {
+              resource: { model: getModelByName('crew_periods'), client: prisma },
+              options: { navigation: 'Quản lý Hạm đội' },
+            },
           ],
           branding: {
             companyName: 'Pockit Admin',
