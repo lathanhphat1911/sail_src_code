@@ -12,13 +12,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { StoriesModule } from './stories/stories.module';
 import { AchievementsModule } from './achievements/achievements.module';
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-// @ts-ignore
 import { AdminModule } from '@adminjs/nestjs';
-
-// @ts-ignore
 import AdminJS from 'adminjs';
-
-// @ts-ignore
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
 

@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@adminjs/express": "^6.1.1",
-    "@adminjs/nestjs": "^7.0.0",
-    "@adminjs/prisma": "^5.0.4",
+    "@adminjs/nestjs": "^6.1.0",
+    "@adminjs/prisma": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
