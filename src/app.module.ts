@@ -29,8 +29,6 @@ const datamodelEnumMap = Object.fromEntries(
   Prisma.dmmf.datamodel.enums.map((enumType) => [enumType.name, enumType]),
 );
 
-// @adminjs/prisma expects Prisma client internals that are no longer exposed in newer Prisma versions.
-// Provide a compatible shape so the adapter can read model and enum metadata.
 (prisma as any)._baseDmmf = {
   modelMap,
   datamodelEnumMap,

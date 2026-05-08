@@ -2,9 +2,23 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
+
+  app.use((req, res, next) => {
+    if (req.originalUrl.startsWith('/admin')) {
+      return next();
+    }
+    express.json()(req, res, () => {
+      express.urlencoded({ extended: true })(req, res, next);
+    });
+  });
+
+
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
@@ -15,14 +29,12 @@ async function bootstrap() {
     },
   }));
   
-  // 💥 ĐÃ NÂNG CẤP KHIÊN CORS CHỐNG LỖI NETWORK ERROR
   app.enableCors({
     origin: '*', 
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
   
-  // 💥 CẤU HÌNH CỔNG CHO RAILWAY (Bạn đã làm rất chuẩn)
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0'); 
   
