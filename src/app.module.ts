@@ -10,10 +10,76 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { CrewPeriodsModule } from './crew-periods/crew-periods.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StoriesModule } from './stories/stories.module';
+import { AchievementsModule } from './achievements/achievements.module';
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+import { AdminModule } from '@adminjs/nestjs';
+import AdminJS from 'adminjs';
+import { Database, Resource, getModelByName } from '@adminjs/prisma';
+import { PrismaClient } from '@prisma/client';
+
+AdminJS.registerAdapter({
+  Resource: Resource,
+  Database: Database,
+});
+
+const prisma = new PrismaClient();
 
 @Module({
-  imports: [CrewsModule, PrismaModule, UsersModule, AuthModule, BankAccountsModule, CrewPeriodsModule, ScheduleModule.forRoot(), StoriesModule],
+  imports: [
+    CrewsModule,
+    PrismaModule,
+    UsersModule,
+    AuthModule,
+    BankAccountsModule,
+    CrewPeriodsModule,
+    ScheduleModule.forRoot(),
+    StoriesModule,
+    AchievementsModule,
+    AdminModule.createAdminAsync({
+      useFactory: () => ({
+        adminJsOptions: {
+          rootPath: '/admin',
+          resources: [
+            {
+              resource: { model: getModelByName('users'), client: prisma },
+              options: {
+                navigation: 'Quản lý Hệ thống',
+                properties: { password_hash: { isVisible: false } },
+              },
+            },
+            {
+              resource: { model: getModelByName('crews'), client: prisma },
+              options: { navigation: 'Quản lý Hạm đội' },
+            },
+          ],
+          branding: {
+            companyName: 'Pockit Admin',
+            softwareBrothers: false,
+          },
+        },
+        auth: {
+          authenticate: (email: string, password: string) => {
+            if (
+              email === process.env.ADMIN_EMAIL &&
+              password === process.env.ADMIN_PASSWORD
+            ) {
+              return Promise.resolve({ email, role: 'admin' });
+            }
+            return Promise.resolve(null);
+          },
+          cookieName: 'adminjs_pockit_cookie',
+          cookiePassword: 'doi-cai-chuoi-nay-thanh-mat-khau-bat-ky-cua-may',
+        },
+        sessionOptions: {
+          resave: true,
+          saveUninitialized: true,
+          secret: 'mot-chuoi-bi-mat-khac-cho-session',
+        },
+      }),
+    }),
+  ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
 })
 export class AppModule {}
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */

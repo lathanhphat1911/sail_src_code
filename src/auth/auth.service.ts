@@ -136,10 +136,13 @@ export class AuthService {
         full_name: true,
         avatar_url: true,
         created_at: true,
+        equipped_achievement: {
+          select: { id: true, name: true, icon_url: true },
+        },
         _count: {
-          select: { crews: true } 
-        }
-      }
+          select: { crews: true },
+        },
+      },
     });
   }
 }

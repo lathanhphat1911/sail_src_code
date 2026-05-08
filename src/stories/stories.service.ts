@@ -50,22 +50,31 @@ export class StoriesService {
         status: 'ACTIVE'
       },
       include: {
-        users: { select: { full_name: true, avatar_url: true } },
-        crews: { select: { name: true, color: true } }           
+        users: {
+          select: {
+            full_name: true,
+            avatar_url: true,
+            equipped_achievement: {
+              select: { id: true, name: true, icon_url: true },
+            },
+          },
+        },
+        crews: { select: { name: true, color: true } },
       },
       orderBy: { created_at: 'desc' }, 
       take: 20 
     });
 
-    return feed.map(post => ({
+    return feed.map((post) => ({
       id: post.id,
       crewName: post.crews?.name,
       userName: post.users?.full_name || 'Ẩn danh',
-      avatar: post.crews?.color || '#3b82f6', 
+      avatar: post.crews?.color || '#3b82f6',
       image: post.media_url,
       caption: post.caption,
       comments: 0,
-      createdAt: post.created_at
+      createdAt: post.created_at,
+      userBadge: post.users?.equipped_achievement ?? null,
     }));
   }
 
