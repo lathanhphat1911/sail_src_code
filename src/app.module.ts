@@ -54,34 +54,52 @@ const getModelByName = (modelName: string) => {
         adminJsOptions: {
           rootPath: '/admin',
           resources: [
+            // ==========================================
+            // 👤 NHÓM 1: QUẢN LÝ NGƯỜI DÙNG & HỆ THỐNG
+            // ==========================================
             {
               resource: { model: getModelByName('users'), client: prisma },
-              options: {
-                navigation: 'Quản lý Hệ thống',
-                properties: { password_hash: { isVisible: false } },
+              options: { 
+                navigation: '👤 Người dùng & Hệ thống',
+                properties: { password_hash: { isVisible: false } } 
               },
             },
-            {
-              resource: { model: getModelByName('crews'), client: prisma },
-              options: { navigation: 'Quản lý Hạm đội' },
-            },
-            // 👇 THÊM TẤT CẢ CÁC BẢNG CÒN LẠI VÀO ĐÂY
-            {
-              resource: { model: getModelByName('achievements'), client: prisma },
-              options: { navigation: 'Quản lý Hệ thống' },
-            },
-            {
-              resource: { model: getModelByName('stories'), client: prisma },
-              options: { navigation: 'Quản lý Hoạt động' },
-            },
-            {
-              resource: { model: getModelByName('bank_accounts'), client: prisma },
-              options: { navigation: 'Quản lý Tài chính' },
-            },
-            {
-              resource: { model: getModelByName('crew_periods'), client: prisma },
-              options: { navigation: 'Quản lý Hạm đội' },
-            },
+            { resource: { model: getModelByName('user_settings'), client: prisma }, options: { navigation: '👤 Người dùng & Hệ thống' } },
+            { resource: { model: getModelByName('activity_logs'), client: prisma }, options: { navigation: '👤 Người dùng & Hệ thống' } },
+            { resource: { model: getModelByName('notifications'), client: prisma }, options: { navigation: '👤 Người dùng & Hệ thống' } },
+            { resource: { model: getModelByName('invite_codes'), client: prisma }, options: { navigation: '👤 Người dùng & Hệ thống' } },
+          
+            // ==========================================
+            // 🚢 NHÓM 2: QUẢN LÝ HẠM ĐỘI
+            // ==========================================
+            { resource: { model: getModelByName('crews'), client: prisma }, options: { navigation: '🚢 Quản lý Hạm đội' } },
+            { resource: { model: getModelByName('crew_periods'), client: prisma }, options: { navigation: '🚢 Quản lý Hạm đội' } },
+            { resource: { model: getModelByName('memberships'), client: prisma }, options: { navigation: '🚢 Quản lý Hạm đội' } },
+          
+            // ==========================================
+            // 💰 NHÓM 3: TÀI CHÍNH & GIAO DỊCH
+            // ==========================================
+            { resource: { model: getModelByName('bank_accounts'), client: prisma }, options: { navigation: '💰 Tài chính & Kinh tế' } },
+            { resource: { model: getModelByName('transaction_categories'), client: prisma }, options: { navigation: '💰 Tài chính & Kinh tế' } },
+            { resource: { model: getModelByName('transactions'), client: prisma }, options: { navigation: '💰 Tài chính & Kinh tế' } },
+            { resource: { model: getModelByName('sepay_webhook_logs'), client: prisma }, options: { navigation: '💰 Tài chính & Kinh tế' } },
+          
+            // ==========================================
+            // 🎯 NHÓM 4: NHIỆM VỤ, VẬT PHẨM & THÀNH TỰU
+            // ==========================================
+            { resource: { model: getModelByName('missions'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+            { resource: { model: getModelByName('user_missions'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+            { resource: { model: getModelByName('achievements'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+            { resource: { model: getModelByName('user_achievements'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+            { resource: { model: getModelByName('items'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+            { resource: { model: getModelByName('user_items'), client: prisma }, options: { navigation: '🎯 Game Hóa (Gamification)' } },
+          
+            // ==========================================
+            // 📰 NHÓM 5: MẠNG XÃ HỘI (STORIES)
+            // ==========================================
+            { resource: { model: getModelByName('stories'), client: prisma }, options: { navigation: '📰 Bảng tin (Stories)' } },
+            { resource: { model: getModelByName('story_comments'), client: prisma }, options: { navigation: '📰 Bảng tin (Stories)' } },
+            { resource: { model: getModelByName('story_likes'), client: prisma }, options: { navigation: '📰 Bảng tin (Stories)' } },
           ],
           branding: {
             companyName: 'Pockit Admin',
