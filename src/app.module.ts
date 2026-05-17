@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { BankConnectionsModule } from './bank-connections/bank-connections.module';
+import { ContributionsModule } from './contributions/contributions.module';
 import { CrewPeriodsModule } from './crew-periods/crew-periods.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StoriesModule } from './stories/stories.module';
@@ -47,6 +48,7 @@ const getModelByName = (modelName: string) => {
     AuthModule,
     BankAccountsModule,
     BankConnectionsModule,
+    ContributionsModule,
     CrewPeriodsModule,
     ScheduleModule.forRoot(),
     StoriesModule,
