@@ -39,6 +39,13 @@ enum crew_status {
   FAILED
 }
 
+enum contribution_status {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+}
+
 // --- MODELS ---
 
 model users {
@@ -74,6 +81,8 @@ model users {
   transactions   transactions[]
   user_settings  user_settings?
   bank_accounts   bank_accounts[]
+  bank_connections bank_connections[]
+  contributions  contributions[]
 }
 
 model items {
@@ -172,32 +181,54 @@ model bank_accounts {
   crews          crews[]
 }
 
-model crews {
-  id            String    @id @default(uuid()) @db.Uuid
-  name          String    @db.VarChar(100)
-  description   String?
-  goal          Decimal   @db.Decimal(15, 2)
-  owner_id      String?   @db.Uuid
-  status          crew_status? @default(ACTIVE)
-  failure_count   Int?         @default(0)
-  total_balance Decimal?  @default(0.00) @db.Decimal(15, 2)
-  currency      String?   @default("VND") @db.VarChar(10)
-  color         String?   @default("#2563eb")
-  avatar_url      String?
-  
-  created_at    DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime  @updatedAt @db.Timestamptz(6)
-  deleted_at    DateTime? @db.Timestamptz(6) // Soft delete cho Hạm đội
-  bank_account_id String? @db.Uuid
-  bank_accounts   bank_accounts? @relation(fields: [bank_account_id], references: [id])
+model bank_connections {
+  id                  String         @id @default(uuid()) @db.Uuid
+  user_id             String         @db.Uuid
+  bank_name           String         @db.VarChar(255)
+  bank_bin            String         @db.VarChar(50)
+  account_number      String         @db.VarChar(100)
+  account_name        String         @db.VarChar(255)
+  casso_connection_id String         @unique @db.VarChar(255)
+  is_active           Boolean        @default(true)
+  created_at          DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime       @updatedAt @db.Timestamptz(6)
 
-  users         users?          @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  activity_logs activity_logs[]
-  crew_periods  crew_periods[]
-  invite_codes  invite_codes[]
-  memberships   memberships[]
-  stories       stories[]
-  transactions  transactions[]
+  user                users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  crews               crews[]
+  contributions       contributions[]
+}
+
+model crews {
+  id                  String           @id @default(uuid()) @db.Uuid
+  name                String           @db.VarChar(100)
+  description         String?
+  goal                Decimal          @db.Decimal(15, 2)
+  owner_id            String?          @db.Uuid
+  status              crew_status?     @default(ACTIVE)
+  failure_count       Int?             @default(0)
+  total_balance       Decimal?         @default(0.00) @db.Decimal(15, 2)
+  currency            String?          @default("VND") @db.VarChar(10)
+  color               String?          @default("#2563eb")
+  avatar_url          String?
+  
+  created_at          DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime         @updatedAt @db.Timestamptz(6)
+  deleted_at          DateTime?        @db.Timestamptz(6)
+  
+  bank_account_id     String?          @db.Uuid
+  bank_connection_id  String?          @db.Uuid
+
+  users               users?           @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bank_accounts       bank_accounts?   @relation(fields: [bank_account_id], references: [id])
+  bank_connection     bank_connections? @relation(fields: [bank_connection_id], references: [id], onDelete: SetNull)
+  
+  activity_logs       activity_logs[]
+  crew_periods        crew_periods[]
+  invite_codes        invite_codes[]
+  memberships         memberships[]
+  stories             stories[]
+  transactions        transactions[]
+  contributions       contributions[]
 }
 
 model memberships {
@@ -255,6 +286,34 @@ model transactions {
   crews                  crews?                  @relation(fields: [crew_id], references: [id])
   crew_periods           crew_periods?           @relation(fields: [period_id], references: [id])
   users                  users?                  @relation(fields: [user_id], references: [id])
+}
+
+model contributions {
+  id                  String                @id @default(uuid()) @db.Uuid
+  crew_id             String                @db.Uuid
+  payer_id            String                @db.Uuid
+  amount              Decimal               @db.Decimal(15, 2)
+  memo                String                @unique @db.VarChar(255)
+  status              contribution_status   @default(PENDING)
+  bank_connection_id  String                @db.Uuid
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  paid_at             DateTime?             @db.Timestamptz(6)
+  updated_at          DateTime              @updatedAt @db.Timestamptz(6)
+
+  crew                crews                 @relation(fields: [crew_id], references: [id], onDelete: Cascade)
+  payer               users                 @relation(fields: [payer_id], references: [id], onDelete: Cascade)
+  bank_connection     bank_connections      @relation(fields: [bank_connection_id], references: [id], onDelete: Restrict)
+  payment_events      payment_events[]
+}
+
+model payment_events {
+  id              String             @id @default(uuid()) @db.Uuid
+  transaction_id  String             @unique @db.VarChar(255)
+  contribution_id String             @db.Uuid
+  raw_payload     Json
+  created_at      DateTime           @default(now()) @db.Timestamptz(6)
+
+  contribution    contributions      @relation(fields: [contribution_id], references: [id], onDelete: Cascade)
 }
 
 model crew_periods {

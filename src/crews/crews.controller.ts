@@ -1,12 +1,17 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, ParseUUIDPipe, Headers, UnauthorizedException } from '@nestjs/common';
 import { CrewsService } from './crews.service';
+import { BankConnectionsService } from '../bank-connections/bank-connections.service';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateCrewDto } from './dto/create-crew.dto';
 import { CreateInviteDto, JoinCrewDto } from './dto/invite.crew.dto';
+import { LinkBankToCrewDto } from '../bank-connections/dto/link-bank-to-crew.dto';
 
 @Controller('crews')
 export class CrewsController {
-  constructor(private readonly crewsService: CrewsService) {}
+  constructor(
+    private readonly crewsService: CrewsService,
+    private readonly bankConnectionsService: BankConnectionsService
+  ) {}
 
   @Get('/hello')
   nigger(){
@@ -41,6 +46,18 @@ export class CrewsController {
   @Patch(':id/bank-account')
   linkBankAccount(@Param('id') id: string, @Body('bankAccountId') bankAccountId: string) {
     return this.crewsService.linkBankAccount(id, bankAccountId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/link-bank')
+  linkBankConnection(@Param('id', ParseUUIDPipe) crewId: string, @Request() req, @Body() dto: LinkBankToCrewDto) {
+    return this.bankConnectionsService.linkBankToCrew(crewId, req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':id/bank-connection')
+  getCrewBankConnection(@Param('id', ParseUUIDPipe) crewId: string) {
+    return this.bankConnectionsService.getCrewBankConnection(crewId);
   }
 
   @UseGuards(AuthGuard('jwt'))
